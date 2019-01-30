@@ -5,9 +5,10 @@
  * Provide a set of tools to work as a basic risk management system
 
 ## Questions
- * Regarding the first goal
+ * Edge Requirements
  	* What is lowest win probability needed to get a non-zero expected log return?
  		* Answer should be a function of number of bets, and the definition of "non-zero" (answered in BreakEvenAnalysis)
  	* What is the likelihood we will make money over n periods given an optimal betting strategy?
  * Risk Management System:
-    * Optimize betting given a set of win probabilities, needs to be able to quanitfy risk aversion
+    * Optimize betting given a set of win probabilities
+     	* needs to be able to quanitfy risk aversion
