@@ -7,6 +7,7 @@ import cvxpy as cp
 import math
 from scipy.special import comb
 import itertools
+import random
 
 #First function, return optimal bet as a function of win probabilities
 def optimal_bet_given_probs(dfProb, vig):
@@ -20,7 +21,6 @@ def optimal_bet_given_probs(dfProb, vig):
 
     #Calculate the number of bets
     numBets = dfProb.shape[0]
-    inds = [x for x in range(numBets)]
     #Calculate the return of a winning bet (equals 1-vig)
     ret = 1-vig
     #Set up cvxpy problem
@@ -34,6 +34,28 @@ def optimal_bet_given_probs(dfProb, vig):
     #return the solution, w is the optimal betting weights, the objective is the optimal return
     #here I convert the optimal return to a nominal return instead of a log return
     return w.value, math.exp(problem.value)-1
+
+#Second function, return optimal bet given a set of bets with the same win probability
+def optimal_bet_given_same_probs(dfProb, numBets, vig):
+    '''optimal_bet_given_same_probs takes a pandas df defining the win probability, returns the optimal bet size and expected return
+    INPUTS:
+        dfProb: pandas df, should have 1 column and all rows being the same value, the probability a given bet will pay off
+        numBets: int, number of bets one can place given that probability
+        vig: float, amount lost due to transaction cost
+    OUTPUTS:
+        1: amount to place for one of the bets
+        2: expected return
+    '''
+    ret = 1-vig
+    w = cp.Variable(1)
+    constraints = [w*numBets <= 1, w >= 0]
+    problem = cp.Problem(cp.Maximize(objective_given_same_probs(dfProb, w, numBets, ret)))
+    #Solve the problem
+    problem.solve()
+
+    #return the solution, w is the optimal betting weight for a given bet, the objective is the optimal return
+    #Here I convert the optimal return to a nominal return instead of a log return
+    return w.value[0], math.exp(problem.value)-1
 
 #helper function for optimal_bet_given_probs
 def objective_given_probs(dfProb, w, ret):
@@ -64,6 +86,26 @@ def objective_given_probs(dfProb, w, ret):
             obj = obj + prob*(cp.log(1 + ret*cp.matmul(w.T,trues) - cp.matmul(w.T, 1-trues)))
     return obj
 
+def objective_given_same_probs(dfProb, w, numBets, ret):
+    '''objective_given_same_probs takes a probability for winning, a number of bets and returns the objective function for log optimal growth
+    INPUTS:
+        dfProb: pandas df, should have 1 row and 1 column.  Should be a probability
+        w: cvxpy variable, length 1
+        numBets: integer, should be number of bets that you can place with the specific win probabbility
+        ret: float, return of a winning bet
+    OUTPUTS:
+        obj: cvxpy expression, objective function
+    '''
+    obj = 0.
+    winProb = dfProb.values[0][0]
+    for r in range(numBets + 1):
+        logProb = r*math.log(winProb) + (numBets - r)*math.log(1 - winProb)
+        prob = comb(numBets, r)*math.exp(logProb)
+        obj = obj + prob*(cp.log(1 + ret*(r*w) - (numBets-r)*w))
+
+    return obj
+
+
 
 #Now, define a function that calculates the break even probability
 def calc_breakeven_prob(vig, n, cutoff = .01, tol=1e-4):
@@ -82,8 +124,8 @@ def calc_breakeven_prob(vig, n, cutoff = .01, tol=1e-4):
     '''
     prob = .5
     h = .25
-    dfProb = make_df_prob(prob, n)
-    weights, obj = optimal_bet_given_probs(dfProb, vig)
+    dfProb = make_df_prob(prob)
+    weights, obj = optimal_bet_given_same_probs(dfProb, n, vig)
     while (abs(obj - cutoff) > tol):
         if (obj - cutoff > 0):
             prob = prob - h
@@ -91,13 +133,77 @@ def calc_breakeven_prob(vig, n, cutoff = .01, tol=1e-4):
         else:
             prob = prob + h
             h = h/2.
-        dfProb = make_df_prob(prob, n)
-        weights, obj = optimal_bet_given_probs(dfProb, vig)
-    return prob, sum(weights)
+        dfProb = make_df_prob(prob)
+        weights, obj = optimal_bet_given_same_probs(dfProb, n, vig)
+    return prob, n*sum(weights)
 
 #Define a helper function for calc_breakeven_prob
-def make_df_prob(prob, n):
-    l = [prob]*n
+def make_df_prob(prob):
+    l = [prob]
     return pd.DataFrame(l, columns=['Probabilities'])
+
+#Helper functions to run monte-carlo simulations
+#Define probability cutoffs for different events
+def probability_cutoffs(dfProb, numBets):
+    '''probability_cutoffs is a helper function, returns a list of probabilites
+    INTPUTS:
+        dfProb: pandas df object, should have 1 column and at least 1 row.  The value should be the probability of winning a bet
+        numBets: int, number of bets available to the etter this time period
+    OUTPUTS:
+        l: list object, values should be the probability cutoffs for the bets
+        It assumes that the first cutoff is winning 0 bets, and the last cutoff is winning all bets
+    '''
+    l = list()
+    winProb = dfProb.values[0][0]
+    prob = 0
+    for r in range(numBets+1):
+        logProb = r*math.log(winProb) + (numBets - r)*math.log(1 - winProb)
+        prob = prob + comb(numBets, r)*math.exp(logProb)
+        l.append(prob)
+    return l
+
+#Helper function for calculating return
+def get_return(amountPerBet, nBets, probCutoffs):
+    realization = random.random()
+    for nWins in range(len(probCutoffs)):
+        if realization
+
+
+#Helper function to print output
+def print_conditions_for_wealth_paths(dfProb, nBets, optimalAmountPerBet, listOfTimeStepsToRecord, vig, numSim):
+    print('Here are the simulation conditions')
+    print('During each time period, the player places ' + str(nBets) + ' bets')
+    print('Each bet has a win probability of ' + str(100*dfProb.values[0][0]) + '%')
+    print('Each bet made will be for ' + str(100*optimalAmountPerBet) + '% of the player''s wealth')
+    print('Each winning bet will return ' + str(100*(1-vig)) + '% of the amount bet ')
+    print('It runs ' + str(numSim) + ' independent monte-carlo simulations')
+    print('It records the wealth distribution after the following time steps ' + str(listOfTimeStepsToRecord))
+
+def simulate_wealth_paths(dfProb, numBets, listOfTimeStepsToRecord, vig=.02, numSim=10000):
+    '''simulate_wealth_paths simulates wealth paths given the optimal betting framework
+    INPUTS:
+        dfProb: pandas df object, should have 1 column and at least 1 row.  The value should be the probability of winning a bet
+        numBets: int, number of bets one can make per week
+        listoftimeStepsToRecord: list object, time points to record the wealth distribution 
+        nSim: integer, number of wealth path simulations to perform
+    OUTPUTS:
+        dfOut: pandas df, should have number of columns equal to the number of time steps
+    '''
+    #Step 1: Define helpful quantities
+    #Get the bet amount for each bet
+    optimalAmountPerBet, _ = optimal_bet_given_same_probs(dfProb, numBets, vig)
+
+    print_conditions_for_wealth_paths(dfProb, numBets, optimalAmountPerBet, listOfTimeStepsToRecord, vig, numSim)
+
+    #Step 2: initialize dfOut object
+    dfOut = pd.DataFrame(np.ones((numSim,1)), columns=['Time 0'])
+    
+    #Step 3: Iterate over all the time periods
+    for time in range(1,numSim+1):
+
+
+    return 0
+    #dfOut = pd.DataFrame(pd)
+
 
 
