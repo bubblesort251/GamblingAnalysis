@@ -183,7 +183,8 @@ def print_conditions_for_wealth_paths(dfProb, nBets, optimalAmountPerBet, listOf
     print('It runs ' + str(numSim) + ' independent monte-carlo simulations')
     print('It records the wealth distribution after the following time steps ' + str(listOfTimeStepsToRecord))
 
-def simulate_wealth_paths(dfProb, numBets, listOfTimeStepsToRecord, vig=.02, numSim=10000):
+
+def simulate_wealth_paths(dfProb, numBets, listOfTimeStepsToRecord, vig = .02, numSim = 10000, lowerBound = 0.):
     '''simulate_wealth_paths simulates wealth paths given the optimal betting framework
     INPUTS:
         dfProb: pandas df object, should have 1 column and at least 1 row.  The value should be the probability of winning a bet
@@ -193,6 +194,7 @@ def simulate_wealth_paths(dfProb, numBets, listOfTimeStepsToRecord, vig=.02, num
     OUTPUTS:
         dfOut: pandas df, should have number of columns equal to the number of time steps
     '''
+
     #Step 1: Define helpful quantities
     optimalAmountPerBet, _ = optimal_bet_given_same_probs(dfProb, numBets, vig)
     probCutoffs = probability_cutoffs(dfProb, numBets)
@@ -212,7 +214,10 @@ def simulate_wealth_paths(dfProb, numBets, listOfTimeStepsToRecord, vig=.02, num
         if(time == 1):
             dfNewTime = dfTimeStep
         else:
+            previousWealth = dfNewTime
+            stoppedPlaying = (dfNewTime <= lowerBound)
             dfNewTime = dfNewTime*dfTimeStep
+            dfNewTime[stoppedPlaying] = previousWealth[stoppedPlaying]
         if(time in listOfTimeStepsToRecord):
             dfOut['Time ' + str(time)] = dfNewTime
 
