@@ -135,7 +135,7 @@ def calc_breakeven_prob(vig, n, cutoff = .01, tol=1e-4):
             h = h/2.
         dfProb = make_df_prob(prob)
         weights, obj = optimal_bet_given_same_probs(dfProb, n, vig)
-    return prob, n*sum(weights)
+    return prob, n*weights
 
 #Define a helper function for calc_breakeven_prob
 def make_df_prob(prob):
@@ -163,10 +163,14 @@ def probability_cutoffs(dfProb, numBets):
     return l
 
 #Helper function for calculating return
-def get_return(amountPerBet, nBets, probCutoffs):
+def get_return(placeholder, amountPerBet, numBets, probCutoffs, ret):
     realization = random.random()
-    for nWins in range(len(probCutoffs)):
-        if realization
+    for numWins in range(len(probCutoffs)):
+        if (realization <= probCutoffs[numWins]):
+            #The return is this amount
+            return (1. + ret*numWins*amountPerBet - (numBets - numWins)*amountPerBet)
+
+    return 1+ret*nBets*amountPerBet
 
 
 #Helper function to print output
@@ -190,19 +194,29 @@ def simulate_wealth_paths(dfProb, numBets, listOfTimeStepsToRecord, vig=.02, num
         dfOut: pandas df, should have number of columns equal to the number of time steps
     '''
     #Step 1: Define helpful quantities
-    #Get the bet amount for each bet
     optimalAmountPerBet, _ = optimal_bet_given_same_probs(dfProb, numBets, vig)
+    probCutoffs = probability_cutoffs(dfProb, numBets)
+    ret = 1-vig
 
+    #Print out what the simulation will do
     print_conditions_for_wealth_paths(dfProb, numBets, optimalAmountPerBet, listOfTimeStepsToRecord, vig, numSim)
 
     #Step 2: initialize dfOut object
     dfOut = pd.DataFrame(np.ones((numSim,1)), columns=['Time 0'])
     
     #Step 3: Iterate over all the time periods
-    for time in range(1,numSim+1):
+    for time in range(1,max(listOfTimeStepsToRecord)+1):
+        #Create a df array of ones
+        dfTimeStep = pd.DataFrame(np.ones((numSim, 1)), columns=['Returns'])
+        dfTimeStep = dfTimeStep.apply(get_return, args=(optimalAmountPerBet, numBets, probCutoffs, ret,), axis=1)
+        if(time == 1):
+            dfNewTime = dfTimeStep
+        else:
+            dfNewTime = dfNewTime*dfTimeStep
+        if(time in listOfTimeStepsToRecord):
+            dfOut['Time ' + str(time)] = dfNewTime
 
-
-    return 0
+    return dfOut
     #dfOut = pd.DataFrame(pd)
 
 
